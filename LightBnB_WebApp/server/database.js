@@ -20,17 +20,6 @@ const pool = new Pool({
  * @return {Promise<{}>} A promise to the user.
  */
 const getUserWithEmail = function(email) {
-  // let user;
-  // for (const userId in users) {
-  //   user = users[userId];
-  //   if (user.email.toLowerCase() === email.toLowerCase()) {
-  //     break;
-  //   } else {
-  //     user = null;
-  //   }
-  // }
-  // return Promise.resolve(user);
-
 
   return pool
   .query(`
@@ -56,7 +45,6 @@ exports.getUserWithEmail = getUserWithEmail;
  * @return {Promise<{}>} A promise to the user.
  */
 const getUserWithId = function(id) {
-  // return Promise.resolve(users[id]);
 
   return pool
   .query(`
@@ -82,11 +70,6 @@ exports.getUserWithId = getUserWithId;
  * @return {Promise<{}>} A promise to the user.
  */
 const addUser =  function(user) {
-  // const userId = Object.keys(users).length + 1;
-  // user.id = userId;
-  // users[userId] = user;
-  // return Promise.resolve(user);
-
   const { name, email, password } = user;
   
   return pool
@@ -114,16 +97,16 @@ exports.addUser = addUser;
  * @return {Promise<[{}]>} A promise to the reservations.
  */
 const getAllReservations = function(guest_id, limit = 10) {
-  //return getAllProperties(null, 2);
 
   return pool
   .query(`
-  SELECT reservations.*, properties.*, avg(rating) AS avg_rating  
-  FROM reservations 
-  JOIN properties ON properties.id = reservations.property_id
-  JOIN property_reviews ON property_reviews.property_id = properties.id
+  SELECT properties.*, reservations.*, avg(rating) as average_rating
+  FROM reservations
+  JOIN properties ON reservations.property_id = properties.id
+  JOIN property_reviews ON properties.id = property_reviews.property_id
   WHERE reservations.guest_id = $1
-  GROUP BY properties.id , reservations.id
+  AND reservations.end_date < now()::date
+  GROUP BY properties.id, reservations.id
   ORDER BY reservations.start_date
   LIMIT $2;
   `, [guest_id, limit])
@@ -147,23 +130,70 @@ exports.getAllReservations = getAllReservations;
  * @return {Promise<[{}]>}  A promise to the properties.
  */
 const getAllProperties = function(options, limit = 10) {
-  // const limitedProperties = {};
-  // for (let i = 1; i <= limit; i++) {
-  //   limitedProperties[i] = properties[i];
-  // }
-  // return Promise.resolve(limitedProperties);
 
+  // 1
+  const queryParams = [];
 
-  return pool
-    .query(`SELECT * FROM properties LIMIT $1`, [limit])
-    .then((result) => {
-      //console.log(result.rows);
-      return result.rows;
-    })
-    .catch((err) => {
-      console.log(err.message);
-    });
+  // Function that appends an AND or WHERE to our database queries
+  const searchParams = function(field) {
+    queryParams.push(field);
+    if (queryParams.length >= 1) {
+      queryString += "AND";
+    } else {
+      queryString += "WHERE";
+    }
+  }
 
+  // 2
+  let queryString = `
+  SELECT properties.*, avg(property_reviews.rating) as average_rating
+  FROM properties
+  JOIN property_reviews ON properties.id = property_id 
+  `;
+
+  // 3 - Search parameters that get appended if the user adds them in when searching
+  if (options.city) {
+    queryParams.push(`%${options.city}%`);
+    queryString += `WHERE city LIKE $${queryParams.length} `;
+  }
+  
+  if (options.owner_id) {
+    searchParams(options.owner_id);
+    queryString += ` owner_id = $${queryParams.length} `
+  }
+
+  if (options.minimum_price_per_night) {
+    searchParams(options.minimum_price_per_night * 100);
+    queryString += ` cost_per_night >= $${queryParams.length} `
+  }
+
+  if (options.maximum_price_per_night) {
+    searchParams(options.maximum_price_per_night * 100);
+    queryString += ` cost_per_night <= $${queryParams.length} `
+  }
+
+  if (options.minimum_rating) {
+    searchParams(options.minimum_rating);
+    queryString += ` rating >= $${queryParams.length} `
+  }
+
+  // 4
+  queryParams.push(limit);
+  queryString += `
+  GROUP BY properties.id
+  ORDER BY cost_per_night
+  LIMIT $${queryParams.length};
+  `;
+  
+  // 5
+  //console.log(queryString, queryParams);
+  
+  // 6
+  return pool.query(queryString, queryParams)
+  .then((res) => res.rows)
+  .catch((err) => {
+    console.log(err.message);
+  });
 
 
 }
