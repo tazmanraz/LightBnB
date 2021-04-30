@@ -1,6 +1,8 @@
-const properties = require('./json/properties.json');
-const users = require('./json/users.json');
+// These are no longer needed as our database is fully connected
+// const properties = require('./json/properties.json');
+// const users = require('./json/users.json');
 
+// Node-postgres module to work with our SQL database
 const { Pool } = require('pg');
 
 const pool = new Pool({
@@ -9,7 +11,6 @@ const pool = new Pool({
   host: 'localhost',
   database: 'lightbnb'
 });
-
 
 
 /// Users
@@ -21,6 +22,9 @@ const pool = new Pool({
  */
 const getUserWithEmail = function(email) {
 
+  // Our query using node-postgres. The $ sign formatting is to prevent SQL injection which
+  // is followed by a second parameter as an array of the query item to actually look for
+  // [email] in this case
   return pool
   .query(`
   SELECT * 
@@ -28,7 +32,6 @@ const getUserWithEmail = function(email) {
   WHERE email = $1;
   `, [email])
   .then((result) => {
-    //console.log(result.rows[0]);
     return result.rows[0] || null;
   })
   .catch((err) => {
@@ -53,7 +56,6 @@ const getUserWithId = function(id) {
   WHERE id = $1;
   `, [id])
   .then((result) => {
-    //console.log(result.rows);
     return result.rows[0];
   })
   .catch((err) => {
@@ -70,6 +72,8 @@ exports.getUserWithId = getUserWithId;
  * @return {Promise<{}>} A promise to the user.
  */
 const addUser =  function(user) {
+  
+  // Destructuring user object keys as variables so we can put them in parameterized query 
   const { name, email, password } = user;
   
   return pool
@@ -79,7 +83,6 @@ const addUser =  function(user) {
   RETURNING *;
   `, [name, email, password])
   .then((result) => {
-    //console.log(result.rows[0]);
     return result.rows[0];
   })
   .catch((err) => {
@@ -111,7 +114,6 @@ const getAllReservations = function(guest_id, limit = 10) {
   LIMIT $2;
   `, [guest_id, limit])
   .then((result) => {
-    //console.log(result.rows);
     return result.rows;
   })
   .catch((err) => {
@@ -134,7 +136,8 @@ const getAllProperties = function(options, limit = 10) {
   // 1
   const queryParams = [];
 
-  // Function that appends an AND or WHERE to our database queries
+  // Function that appends an AND or WHERE to our database entry dependig if other parts
+  // were filled in the form
   const searchParams = function(field) {
     queryParams.push(field);
     if (queryParams.length >= 1) {
@@ -207,6 +210,7 @@ exports.getAllProperties = getAllProperties;
  */
 const addProperty = function(property) {
 
+  // Destructuring property object keys as variables so we can put them in parameterized query 
   const { 
     title, 
     description, 
@@ -242,7 +246,6 @@ const addProperty = function(property) {
     post_code
   ])
   .then((result) => {
-
     return result.rows[0];
   })
   .catch((err) => {
